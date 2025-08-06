@@ -4,11 +4,11 @@ import pandas as pd
 
 app = Flask(__name__)
 
-# Загрузка Excel-файла в память (предварительно загрузим его на сервер)
+# Загрузка CSV-файла в память
 df = pd.read_csv("price.csv")
 
 # Укажи свой API-ключ
-openai.api_key = "sk-..."  # Заменить на актуальный!
+openai.api_key = "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"
 
 @app.route("/chat", methods=["POST"])
 def chat():
@@ -16,10 +16,9 @@ def chat():
     if not user_input:
         return jsonify({"reply": "Пустой запрос."})
 
-    # Попробуем найти подходящие строки из Excel по совпадению текста
+    # Поиск совпадений
     matches = df[df.apply(lambda row: row.astype(str).str.contains(user_input, case=False).any(), axis=1)]
-    
-    context = ""
+
     if not matches.empty:
         context = "\n".join(matches.astype(str).agg(" | ".join, axis=1).tolist()[:3])
     else:
@@ -43,9 +42,7 @@ def chat():
             temperature=0.3,
             max_tokens=400
         )
-        reply = response.choices[0].message.content.strip()
-        return jsonify({"reply": reply})
-
+        return jsonify({"reply": response.choices[0].message.content.strip()})
     except Exception as e:
         return jsonify({"reply": f"Ошибка: {str(e)}"})
 
