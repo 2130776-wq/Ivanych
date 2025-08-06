@@ -5,7 +5,7 @@ import pandas as pd
 app = Flask(__name__)
 
 # Загрузка Excel-файла в память (предварительно загрузим его на сервер)
-df = pd.read_excel("price.xlsx")
+df = pd.read_csv("price.csv")
 
 # Укажи свой API-ключ
 openai.api_key = "sk-..."  # Заменить на актуальный!
