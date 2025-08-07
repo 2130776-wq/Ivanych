@@ -4,10 +4,10 @@ import pandas as pd
 
 app = Flask(__name__)
 
-# Загрузка CSV-файла в память
+# Чтение Excel-файла
 df = pd.read_excel("price.xlsx", engine="openpyxl")
 
-# Укажи свой API-ключ
+# OpenAI API-ключ (замени на свой, если нужен)
 openai.api_key = "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"
 
 @app.route("/chat", methods=["POST"])
@@ -16,13 +16,8 @@ def chat():
     if not user_input:
         return jsonify({"reply": "Пустой запрос."})
 
-    # Поиск совпадений
     matches = df[df.apply(lambda row: row.astype(str).str.contains(user_input, case=False).any(), axis=1)]
-
-    if not matches.empty:
-        context = "\n".join(matches.astype(str).agg(" | ".join, axis=1).tolist()[:3])
-    else:
-        context = "Нет точных совпадений, попробуй уточнить запрос."
+    context = "\n".join(matches.astype(str).agg(" | ".join, axis=1).tolist()[:3]) if not matches.empty else "Нет совпадений."
 
     prompt = f"""Ты — консультант Иваныч, специалист по смазочному оборудованию.
 Ответь на запрос клиента только на основе этой информации из прайса:
