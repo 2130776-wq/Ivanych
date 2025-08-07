@@ -5,7 +5,7 @@ import pandas as pd
 app = Flask(__name__)
 
 # Загрузка CSV-файла в память
-df = pd.read_csv("price.csv")
+df = pd.read_csv("price.csv", sep=";")
 
 # Укажи свой API-ключ
 openai.api_key = "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"
