@@ -4,11 +4,11 @@ import json
 
 app = Flask(__name__)
 
-openai.api_key = "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"
-
-# Загружаем товары из price.json
+# Загрузка JSON-файла в память
 with open("price.json", "r", encoding="utf-8") as f:
-    products = json.load(f)
+    data = json.load(f)
+
+openai.api_key = "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"
 
 @app.route("/chat", methods=["POST"])
 def chat():
@@ -16,15 +16,16 @@ def chat():
     if not user_input:
         return jsonify({"reply": "Пустой запрос."})
 
-    matches = [item for item in products if user_input in item["code"]]
+    # Поиск по артикулу
+    matches = [item for item in data if user_input in item["Артикул"]]
 
     if matches:
-        context = "\n".join(f'{m["code"]}: {m["name"]}' for m in matches)
+        context = "\n".join(f'{m["Наименование"]} — {m["Артикул"]}' for m in matches[:3])
     else:
-        context = "Совпадений не найдено в базе артикулов."
+        context = "Нет совпадений. Попробуйте уточнить запрос."
 
     prompt = f"""Ты — консультант Иваныч, специалист по смазочному оборудованию.
-Вот данные из прайса:
+Ответь на запрос клиента только на основе этой информации из прайса:
 
 {context}
 
@@ -43,6 +44,7 @@ def chat():
         )
         reply = response.choices[0].message.content.strip()
         return jsonify({"reply": reply})
+
     except Exception as e:
         return jsonify({"reply": f"Ошибка: {str(e)}"})
 
