@@ -1,13 +1,14 @@
 from flask import Flask, request, jsonify
 import openai
-import pandas as pd
+import json
 
 app = Flask(__name__)
 
-# Загрузка Excel-файла
-df = pd.read_excel("price.xlsx", engine="openpyxl")
-# API-ключ OpenAI
 openai.api_key = "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"
+
+# Загружаем товары из price.json
+with open("price.json", "r", encoding="utf-8") as f:
+    products = json.load(f)
 
 @app.route("/chat", methods=["POST"])
 def chat():
@@ -15,17 +16,15 @@ def chat():
     if not user_input:
         return jsonify({"reply": "Пустой запрос."})
 
-    # Поиск подходящих строк
-    matches = df[df.apply(lambda row: row.astype(str).str.contains(user_input, case=False).any(), axis=1)]
+    matches = [item for item in products if user_input in item["code"]]
 
-    context = ""
-    if not matches.empty:
-        context = "\n".join(matches.astype(str).agg(" | ".join, axis=1).tolist()[:3])
+    if matches:
+        context = "\n".join(f'{m["code"]}: {m["name"]}' for m in matches)
     else:
-        context = "Нет точных совпадений, попробуй уточнить запрос."
+        context = "Совпадений не найдено в базе артикулов."
 
     prompt = f"""Ты — консультант Иваныч, специалист по смазочному оборудованию.
-Ответь на запрос клиента только на основе этой информации из прайса:
+Вот данные из прайса:
 
 {context}
 
@@ -44,7 +43,6 @@ def chat():
         )
         reply = response.choices[0].message.content.strip()
         return jsonify({"reply": reply})
-
     except Exception as e:
         return jsonify({"reply": f"Ошибка: {str(e)}"})
 
