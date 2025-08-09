@@ -5,31 +5,28 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from openai import OpenAI
 
-# === Настройки ===
-# Если у тебя файл называется 1.json — оставь так.
-DATA_FILE = os.getenv("DATA_FILE", "1.json")  # или поменяй на "price.json"
+# === настройки ===
+DATA_FILE = os.getenv("DATA_FILE", "1.json")  # поменяй на "price.json", если нужно
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-# Ключ храним в переменной окружения OPENAI_API_KEY на Render
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+client = OpenAI(api_key=OPENAI_API_KEY)
 
-# === Загрузка прайса ===
 def _norm(s: str) -> str:
-    # нормализуем артикулы: убираем пробелы и дефисы, приводим к верхнему регистру
-    return "".join(ch for ch in s.upper() if ch.isalnum())
+    # нормализуем артикулы: убираем пробелы, дефисы и приводим к верхнему регистру
+    return "".join(ch for ch in str(s).upper() if ch.isalnum())
 
+# загрузка прайса
 with open(DATA_FILE, "r", encoding="utf-8") as f:
     price_data = json.load(f)
 
-# построим быстрый индекс по артикулам
+# быстрый индекс по артикулам
 index = {}
-for item in price_data:
-    art = item.get("Артикул", "")
+for row in price_data:
+    art = row.get("Артикул")
     if art:
-        index[_norm(art)] = item
+        index[_norm(art)] = row
 
-# === Flask ===
 app = Flask(__name__)
-# Разрешаем CORS для /chat (можно оставить "*" или ограничить доменом)
 CORS(app, resources={r"/chat": {"origins": "*"}})
 
 @app.route("/", methods=["GET"])
@@ -40,55 +37,50 @@ def health():
 def chat():
     try:
         payload = request.get_json(force=True) or {}
-        user_message = (payload.get("message") or "").strip()
+        user_text = (payload.get("message") or "").strip()
 
-        if not user_message:
+        if not user_text:
             return jsonify({"reply": "Пустой запрос."}), 200
 
-        # 1) пробуем точное совпадение по артикулу
-        key = _norm(user_message)
+        # 1) точное совпадение
+        key = _norm(user_text)
         item = index.get(key)
 
-        # 2) если точного нет — поищем подстрокой по всем артикулам
+        # 2) если точного нет — поиск подстрокой по артикулам
         if not item:
             for row in price_data:
-                art = _norm(str(row.get("Артикул", "")))
-                if key and key in art:
+                if key and key in _norm(row.get("Артикул", "")):
                     item = row
                     break
 
         if item:
-            name = str(item.get("Наименование", "")).strip()
-            art = str(item.get("Артикул", "")).strip()
-            reply_text = f"Наименование: {name}\nАртикул: {art}"
-            return jsonify({"reply": reply_text}), 200
+            name = (row if not item else item).get("Наименование", "").strip()
+            art = (row if not item else item).get("Артикул", "").strip()
+            return jsonify({"reply": f"Наименование: {name}\nАртикул: {art}"}), 200
 
-        # 3) если в прайсе нет — спрашиваем модель (дешёвая и быстрая)
-        # при необходимости поменяй на gpt-4o
+        # 3) GPT-ответ (кратко по теме)
         completion = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4o-mini",  # можно заменить на gpt-3.5-turbo, если нужно
             messages=[
                 {
                     "role": "system",
                     "content": (
                         "Ты технический консультант по смазочному оборудованию. "
-                        "Отвечай кратко и по делу. Если вопрос не про тему, вежливо скажи, что "
-                        "отвечаешь только по смазочному оборудованию."
+                        "Отвечай кратко и по делу. Если вопрос не по теме — вежливо сообщи, "
+                        "что консультируешь только по смазочному оборудованию."
                     ),
                 },
-                {"role": "user", "content": user_message},
+                {"role": "user", "content": user_text},
             ],
             temperature=0.2,
         )
-        reply_text = completion.choices[0].message.content.strip()
-        return jsonify({"reply": reply_text}), 200
+        reply = completion.choices[0].message.content.strip()
+        return jsonify({"reply": reply}), 200
 
     except Exception as e:
-        # чтобы в логи всё попадало
         print("ERROR /chat:", repr(e))
         return jsonify({"reply": "Ошибка на сервере. Попробуйте ещё раз."}), 200
 
 
 if __name__ == "__main__":
-    # на Render host/port управляются процессом, но так локально удобнее
     app.run(host="0.0.0.0", port=5000, debug=False)
